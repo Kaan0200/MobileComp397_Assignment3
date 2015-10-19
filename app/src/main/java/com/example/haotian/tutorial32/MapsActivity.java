@@ -18,8 +18,13 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 public class MapsActivity extends FragmentActivity {
+    /* -Take Photos Simply-
+    http://developer.android.com/training/camera/photobasics.html
+     */
+
     public static final String TAG = "MapsActivity";
     public static final int THUMBNAIL = 1;
+    public static final int IMAGE_REQUEST_NUMBER = 1;
 
 
 
@@ -40,6 +45,11 @@ public class MapsActivity extends FragmentActivity {
             @Override
             public void onClick(View v) {
 
+                // start a picture request
+                Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+                if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+                    startActivityForResult(takePictureIntent, IMAGE_REQUEST_NUMBER);
+                }
             }
         });
     }
