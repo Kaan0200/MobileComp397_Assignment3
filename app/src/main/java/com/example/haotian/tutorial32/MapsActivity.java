@@ -153,7 +153,9 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
             // create the file
             mCurrentInfoFile = "Assignment3PhotoData.csv";
             File file = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
-            file.createNewFile();
+            if (!file.exists()) {
+                file.createNewFile();
+            }
 
 
             // Create the writing stream
@@ -218,7 +220,7 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
         // get the thumbnail
         if (requestCode == IMAGE_REQUEST_NUMBER && resultCode == RESULT_OK) {
             //Bundle extras = data.getExtras();
-            //Bitmap imageBitmap = (Bitmap) extras.get("data");
+            //Bitmap imageBitmap = (Bitmap) extras.get("data");d
             //mImageView.setImageBitmap(imageBitmap);
         }
     }
