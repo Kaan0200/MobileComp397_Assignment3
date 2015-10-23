@@ -2,12 +2,12 @@ package com.example.haotian.tutorial32;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.IntentSender;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.location.Criteria;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
@@ -18,8 +18,12 @@ import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
-import android.widget.Toast;
 
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
@@ -35,21 +39,25 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
-public class MapsActivity extends FragmentActivity implements LocationListener {
+public class MapsActivity extends FragmentActivity implements LocationListener, GoogleApiClient.ConnectionCallbacks, GoogleApiClient.OnConnectionFailedListener   {
     /* -Take Photos Simply-
     http://developer.android.com/training/camera/photobasics.html
      */
 
     public static final String TAG = "MapsActivity";
     public static final int THUMBNAIL = 1;
+    private final static int CONNECTION_FAILURE_RESOLUTION_REQUEST = 9000;
     public static final int IMAGE_REQUEST_NUMBER = 1;
     static final int REQUEST_TAKE_PHOTO = 1;
 
     private String mCurrentPhotoPath;
-    private File mCurrentInfoFile;
+    private String mCurrentInfoFile;
 
-    private LocationManager locationManager;
-    private String provider;
+    private LocationRequest mLocationRequest;
+    private GoogleApiClient mGoogleApiClient;
+    private Location mCurrentLocation;
+    private boolean mRequestingLocationUpdates;
+
     private GoogleMap mMap; // Might be null if Google Play services APK is not available.
     private Button picButton; //takes user to camera
 
@@ -60,6 +68,12 @@ public class MapsActivity extends FragmentActivity implements LocationListener {
         setContentView(R.layout.activity_maps);
         setUpMapIfNeeded();
         setUpDataFileIfNeeded();
+        createLocationRequest();
+        mGoogleApiClient = new GoogleApiClient.Builder(this)
+                .addConnectionCallbacks(this)
+                .addOnConnectionFailedListener(this)
+                .addApi(LocationServices.API)
+                .build();
 
         picButton = (Button) findViewById(R.id.photobutton);
 
@@ -86,9 +100,6 @@ public class MapsActivity extends FragmentActivity implements LocationListener {
                 }
             }
         });
-        Criteria criteria = new Criteria();
-        provider = locationManager.getBestProvider(criteria, false);
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
     }
 
     private void galleryAddPic() {
@@ -140,13 +151,13 @@ public class MapsActivity extends FragmentActivity implements LocationListener {
     private void setUpDataFileIfNeeded() {
         try {
             // create the file
-            String filename = "Assignment3PhotoData.csv";
-            File file = new File(Environment.getExternalStoragePublicDirectory("Pictures"), filename);
+            mCurrentInfoFile = "Assignment3PhotoData.csv";
+            File file = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
             file.createNewFile();
 
 
             // Create the writing stream
-            FileWriter fw = new FileWriter(file.getAbsoluteFile());
+            FileWriter fw = new FileWriter(file);
             BufferedWriter bw = new BufferedWriter(fw);
 
             bw.write("Filename, Timestamp, Latitude, Longitude, \n");
@@ -187,8 +198,22 @@ public class MapsActivity extends FragmentActivity implements LocationListener {
         //timestamp
         Long tsLong = System.currentTimeMillis() / 1000;
         sb.append(tsLong.toString() + ", ");
-        //
+        //lat & long
+        sb.append(mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude() +", \n");
 
+        // Create the writing stream
+        try {
+            File infoFile = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
+            if (infoFile.exists()) {
+                FileWriter fw = new FileWriter(infoFile, true);
+                BufferedWriter bf = new BufferedWriter(fw);
+                bf.write(sb.toString());
+                Log.i("FILEAPPEND", "Appended the new photo info to the existing file");
+                bf.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         // get the thumbnail
         if (requestCode == IMAGE_REQUEST_NUMBER && resultCode == RESULT_OK) {
@@ -215,37 +240,62 @@ public class MapsActivity extends FragmentActivity implements LocationListener {
         return image;
     }
 
-    protected void onResume() {
-        super.onResume();
-        setUpMapIfNeeded();
-        locationManager.requestLocationUpdates(provider, 400, 1, this);
-    }
-
     @Override
     protected void onPause() {
         super.onPause();
-        locationManager.removeUpdates(this);
+        mGoogleApiClient.disconnect();
+        if (mGoogleApiClient.isConnected()) {
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+        }
     }
 
-    public void onProviderEnabled(String provider) {
-        Toast.makeText(this, "Enabled new provider " + provider,
-                Toast.LENGTH_SHORT).show();
+    @Override
+    protected void onResume() {
+        super.onResume();
+        setUpMapIfNeeded();
+        mGoogleApiClient.connect();
+    }
+
+    protected void createLocationRequest() {
+        mLocationRequest = new LocationRequest();
+        mLocationRequest.setInterval(10000);
+        mLocationRequest.setFastestInterval(5000);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+    }
+
+    @Override
+    public void onConnected(Bundle connectionHint) {
+        Location location = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+        if (location == null) {
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+        }
+        else {
+            Log.i("LOCATIONCHANGE","current location set: " + location.toString());
+            mCurrentLocation = location;
+        }
+    }
+
+    @Override
+    public void onConnectionSuspended(int i) {
 
     }
 
     @Override
-    public void onProviderDisabled(String provider) {
-        Toast.makeText(this, "Disabled provider " + provider,
-                Toast.LENGTH_SHORT).show();
+    public void onConnectionFailed(ConnectionResult connectionResult) {
+        if (connectionResult.hasResolution()) {
+            try {
+                // Start an Activity that tries to resolve the error
+                connectionResult.startResolutionForResult(this, CONNECTION_FAILURE_RESOLUTION_REQUEST);
+            } catch (IntentSender.SendIntentException e) {
+                e.printStackTrace();
+            }
+        } else {
+            Log.i(TAG, "Location services connection failed with code " + connectionResult.getErrorCode());
+        }
     }
 
+    @Override
     public void onLocationChanged(Location location) {
-        int lat = (int) (location.getLatitude());
-        int lng = (int) (location.getLongitude());
-    }
-
-    public void onStatusChanged(String provider, int status, Bundle extras) {
-        // TODO Auto-generated method stub
-
+        mCurrentLocation = location;
     }
 }
