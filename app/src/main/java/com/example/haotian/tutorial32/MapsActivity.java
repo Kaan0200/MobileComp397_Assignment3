@@ -225,9 +225,6 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
 
         // Handle the successfully taken image
         if (requestCode == IMAGE_REQUEST_NUMBER && resultCode == RESULT_OK) {
-            // Get the thumbnail
-            //Bundle extras = data.getExtras();
-            //Bitmap imageBitmap = (Bitmap) extras.get("data");
 
             // Decode it for real
             BitmapFactory.Options bmpFactoryOptions = new BitmapFactory.Options();
@@ -236,23 +233,18 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
             //imageFilePath image path which you pass with intent
             Bitmap bmp = BitmapFactory.decodeFile(mCurrentPhotoPath, bmpFactoryOptions);
 
-            // Make the image view
-            ImageView mThumbView = new ImageView(this);
-            mThumbView.setImageBitmap(bmp);
+            String strCoords = "Lat: " + mCurrentLocation.getLatitude() +
+                    " - Long: " + mCurrentLocation.getLongitude();
 
-            /* ImageButton mThumbView = new ImageButton(this);
-            mThumbView.setImageBitmap(imageBitmap);
-            mThumbView.setOnClickListener(new View.OnClickListener() {
-                @Override
-                public void onClick(View v) {
-                    // Show description text box
-                }
-            }); */
+            LatLng latLng = new LatLng(mCurrentLocation.getLatitude(),
+                    mCurrentLocation.getLongitude());
 
-            // Add image view to map view
-            //ViewGroup map = (ViewGroup) findViewById(R.id.map);
-            //map.addView(mThumbView, ViewGroup.LayoutParams.WRAP_CONTENT);
-            //map.bringChildToFront(mThumbView);
+            mMap.addMarker(new MarkerOptions()
+                    .position(latLng)
+                    .title("New Picture")
+                    .snippet(strCoords)
+                    .icon(BitmapDescriptorFactory.fromBitmap(bmp)));
+
         }
     }
 
