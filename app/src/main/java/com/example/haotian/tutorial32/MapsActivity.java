@@ -6,9 +6,11 @@ import android.content.IntentSender;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
+import android.media.Image;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Bundle;
@@ -17,7 +19,10 @@ import android.provider.MediaStore;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -186,6 +191,7 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
      */
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
 
         // scan the new picture
         Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
@@ -217,11 +223,36 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
             e.printStackTrace();
         }
 
-        // get the thumbnail
+        // Handle the successfully taken image
         if (requestCode == IMAGE_REQUEST_NUMBER && resultCode == RESULT_OK) {
+            // Get the thumbnail
             //Bundle extras = data.getExtras();
-            //Bitmap imageBitmap = (Bitmap) extras.get("data");d
-            //mImageView.setImageBitmap(imageBitmap);
+            //Bitmap imageBitmap = (Bitmap) extras.get("data");
+
+            // Decode it for real
+            BitmapFactory.Options bmpFactoryOptions = new BitmapFactory.Options();
+            bmpFactoryOptions.inJustDecodeBounds = false;
+
+            //imageFilePath image path which you pass with intent
+            Bitmap bmp = BitmapFactory.decodeFile(mCurrentPhotoPath, bmpFactoryOptions);
+
+            // Make the image view
+            ImageView mThumbView = new ImageView(this);
+            mThumbView.setImageBitmap(bmp);
+
+            /* ImageButton mThumbView = new ImageButton(this);
+            mThumbView.setImageBitmap(imageBitmap);
+            mThumbView.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    // Show description text box
+                }
+            }); */
+
+            // Add image view to map view
+            //ViewGroup map = (ViewGroup) findViewById(R.id.map);
+            //map.addView(mThumbView, ViewGroup.LayoutParams.WRAP_CONTENT);
+            //map.bringChildToFront(mThumbView);
         }
     }
 
