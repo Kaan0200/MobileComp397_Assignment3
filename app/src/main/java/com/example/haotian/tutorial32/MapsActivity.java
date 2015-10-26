@@ -1,7 +1,9 @@
 package com.example.haotian.tutorial32;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.IntentSender;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -18,9 +20,11 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 
@@ -59,12 +63,13 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
 
     private String mCurrentPhotoPath;
     private String mCurrentInfoFile;
+    private Marker mCurrentSelectedMarker;
 
     private LocationRequest mLocationRequest;
     private GoogleApiClient mGoogleApiClient;
     private Location mCurrentLocation;
     private boolean mRequestingLocationUpdates;
-
+    private final Context context = this;
     private GoogleMap mMap; // Might be null if Google Play services APK is not available.
     private Button picButton; //takes user to camera
 
@@ -154,6 +159,53 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
      */
     private void setUpMap() {
 
+        // Setup info window click listener
+        mMap.setOnInfoWindowClickListener(new GoogleMap.OnInfoWindowClickListener() {
+            @Override
+            public void onInfoWindowClick(Marker marker) {
+                // get prompts.xml view
+                LayoutInflater li = LayoutInflater.from(context);
+                View promptsView = li.inflate(R.layout.prompts, null);
+
+                AlertDialog.Builder alertDialogBuilder = new AlertDialog.Builder(context);
+
+                // set prompts.xml to alertdialog builder
+                alertDialogBuilder.setView(promptsView);
+
+                final EditText titleInput = (EditText) promptsView
+                        .findViewById(R.id.titleTextEdit);
+
+                final EditText snippetInput = (EditText) promptsView
+                        .findViewById(R.id.snippetTextEdit);
+
+                mCurrentSelectedMarker = marker;
+
+                // set dialog message
+                alertDialogBuilder
+                        .setCancelable(false)
+                        .setPositiveButton("OK",
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog,int id) {
+                                        // Get user input and change the marker info
+                                        mCurrentSelectedMarker.setTitle(titleInput.getText().toString());
+                                        mCurrentSelectedMarker.setSnippet(snippetInput.getText().toString());
+                                    }
+                                })
+                        .setNegativeButton("Cancel",
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog,int id) {
+                                        dialog.cancel();
+                                    }
+                                });
+
+                // create alert dialog
+                AlertDialog alertDialog = alertDialogBuilder.create();
+
+                // show it
+                alertDialog.show();
+            }
+        });
+
         Log.i("MARKER", "Marking all previously taken pictures");
 
         // Read the CSV line by line
@@ -217,7 +269,7 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
             LatLng latLng = new LatLng(latitude, longitude);
 
             // Add marker with image as custom icon
-            mMap.addMarker(new MarkerOptions()
+            Marker marker = mMap.addMarker(new MarkerOptions()
                     .position(latLng)
                     .title("New Picture")
                     .snippet(strCoords)
