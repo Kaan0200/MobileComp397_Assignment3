@@ -189,6 +189,7 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
                                         // Get user input and change the marker info
                                         mCurrentSelectedMarker.setTitle(titleInput.getText().toString());
                                         mCurrentSelectedMarker.setSnippet(snippetInput.getText().toString());
+                                        mCurrentSelectedMarker.showInfoWindow();
                                     }
                                 })
                         .setNegativeButton("Cancel",
