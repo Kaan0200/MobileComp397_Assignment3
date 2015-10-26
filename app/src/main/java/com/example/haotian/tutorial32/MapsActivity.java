@@ -36,9 +36,11 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
+import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -71,9 +73,10 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
-        setUpMapIfNeeded();
         setUpDataFileIfNeeded();
+        setUpMapIfNeeded();
         createLocationRequest();
+
         mGoogleApiClient = new GoogleApiClient.Builder(this)
                 .addConnectionCallbacks(this)
                 .addOnConnectionFailedListener(this)
@@ -150,7 +153,80 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
      * This should only be called once and when we are sure that {@link #mMap} is not null.
      */
     private void setUpMap() {
-        mMap.addMarker(new MarkerOptions().position(new LatLng(20, 20)).title("EECS397/600"));
+
+        Log.i("MARKER", "Marking all previously taken pictures");
+
+        // Read the CSV line by line
+        try {
+            File infoFile = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
+            if (infoFile.exists()) {
+                BufferedReader reader = new BufferedReader(new FileReader(infoFile));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    // For each line in the CSV, try to retrieve the picture that was taken
+                    String[] values = line.split(",");
+                    if (values[0].contains("file:")) {
+                        String imagePath = values[0].substring(5);
+                        File imageFile = new File(imagePath);
+                        if (imageFile.exists()) {
+                            // Previously taken picture exists, make a google map marker with CSV info
+                            Double latitude = Double.parseDouble(values[2]);
+                            Double longitude = Double.parseDouble(values[3]);
+
+                            addMarkerFromImagePathAtLocation(imagePath, latitude, longitude);
+                        } else {
+                            Log.i("MARKER", "Photo no longer exists");
+                        }
+                    }
+                }
+                // Finished reading the CSV
+                reader.close();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // Places a Google Maps marker using the images within the Pictures directory at the given Lat/Long coordinates
+    private void addMarkerFromImagePathAtLocation(String imagePath, double latitude, double longitude) {
+
+        int targetW = 150;
+        int targetH = 150;
+
+        try {
+            // Get the dimensions of the bitmap
+            BitmapFactory.Options bmOptions = new BitmapFactory.Options();
+            bmOptions.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(imagePath, bmOptions);
+            int photoW = bmOptions.outWidth;
+            int photoH = bmOptions.outHeight;
+
+            // Determine how much to scale down the image
+            int scaleFactor = Math.min(photoW / targetW, photoH / targetH);
+
+            // Decode the image file into a Bitmap sized to fill the View
+            bmOptions.inJustDecodeBounds = false;
+            bmOptions.inSampleSize = scaleFactor;
+
+            Bitmap bmp = BitmapFactory.decodeFile(imagePath, bmOptions);
+
+            // Prepare a snippet for the marker
+            String strCoords = "Lat: " + latitude + " - Long: " + longitude;
+
+            // Prepare the position of the marker
+            LatLng latLng = new LatLng(latitude, longitude);
+
+            // Add marker with image as custom icon
+            mMap.addMarker(new MarkerOptions()
+                    .position(latLng)
+                    .title("New Picture")
+                    .snippet(strCoords)
+                    .icon(BitmapDescriptorFactory.fromBitmap(bmp)));
+
+            Log.i("MARKER", "Placed marker at location " + latitude + ":" + longitude);
+        } catch (NullPointerException e) {
+            Log.e("MARKER", "Unable to retrieve existing photo with path from CSV");
+        }
     }
 
     private void setUpDataFileIfNeeded() {
@@ -160,24 +236,23 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
             File file = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
             if (!file.exists()) {
                 file.createNewFile();
+
+                // Create the writing stream
+                FileWriter fw = new FileWriter(file);
+                BufferedWriter bw = new BufferedWriter(fw);
+
+                bw.write("Filename, Timestamp, Latitude, Longitude, \n");
+                bw.close();
+
+                MediaScannerConnection.scanFile(this,
+                        new String[]{file.toString()}, null,
+                        new MediaScannerConnection.OnScanCompletedListener() {
+                            public void onScanCompleted(String path, Uri uri) {
+                                Log.i("ExternalStorage", "Scanned " + path + ":");
+                                Log.i("ExternalStorage", "-> uri=" + uri);
+                            }
+                        });
             }
-
-
-            // Create the writing stream
-            FileWriter fw = new FileWriter(file);
-            BufferedWriter bw = new BufferedWriter(fw);
-
-            bw.write("Filename, Timestamp, Latitude, Longitude, \n");
-            bw.close();
-
-            MediaScannerConnection.scanFile(this,
-                    new String[]{file.toString()}, null,
-                    new MediaScannerConnection.OnScanCompletedListener() {
-                        public void onScanCompleted(String path, Uri uri) {
-                            Log.i("ExternalStorage", "Scanned " + path + ":");
-                            Log.i("ExternalStorage", "-> uri=" + uri);
-                        }
-                    });
 
         } catch (IOException e) {
             new Exception("bad write to Assignment3Photodata");
@@ -193,58 +268,43 @@ public class MapsActivity extends FragmentActivity implements LocationListener, 
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        // scan the new picture
-        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        File f = new File(mCurrentPhotoPath);
-        Uri contentUri = Uri.fromFile(f);
-        mediaScanIntent.setData(contentUri);
-        this.sendBroadcast(mediaScanIntent);
-
-        //write to the csv with the various info things
-        StringBuilder sb = new StringBuilder();
-        sb.append(mCurrentPhotoPath + ", ");
-        //timestamp
-        Long tsLong = System.currentTimeMillis() / 1000;
-        sb.append(tsLong.toString() + ", ");
-        //lat & long
-        sb.append(mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude() +", \n");
-
-        // Create the writing stream
-        try {
-            File infoFile = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
-            if (infoFile.exists()) {
-                FileWriter fw = new FileWriter(infoFile, true);
-                BufferedWriter bf = new BufferedWriter(fw);
-                bf.write(sb.toString());
-                Log.i("FILEAPPEND", "Appended the new photo info to the existing file");
-                bf.close();
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        // Handle the successfully taken image
+        // Handle the successfully taken picture
         if (requestCode == IMAGE_REQUEST_NUMBER && resultCode == RESULT_OK) {
 
-            // Decode it for real
-            BitmapFactory.Options bmpFactoryOptions = new BitmapFactory.Options();
-            bmpFactoryOptions.inJustDecodeBounds = false;
+            // scan the new picture
+            Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+            File f = new File(mCurrentPhotoPath);
+            Uri contentUri = Uri.fromFile(f);
+            mediaScanIntent.setData(contentUri);
+            this.sendBroadcast(mediaScanIntent);
 
-            //imageFilePath image path which you pass with intent
-            Bitmap bmp = BitmapFactory.decodeFile(mCurrentPhotoPath, bmpFactoryOptions);
+            //write to the csv with the various info things
+            StringBuilder sb = new StringBuilder();
+            sb.append(mCurrentPhotoPath + ", ");
+            //timestamp
+            Long tsLong = System.currentTimeMillis() / 1000;
+            sb.append(tsLong.toString() + ", ");
+            //lat & long
+            sb.append(mCurrentLocation.getLatitude() + ", " + mCurrentLocation.getLongitude() +", \n");
 
-            String strCoords = "Lat: " + mCurrentLocation.getLatitude() +
-                    " - Long: " + mCurrentLocation.getLongitude();
+            // Append photo info to CSV
+            try {
+                File infoFile = new File(Environment.getExternalStoragePublicDirectory("Pictures"), mCurrentInfoFile);
+                if (infoFile.exists()) {
+                    FileWriter fw = new FileWriter(infoFile, true);
+                    BufferedWriter bf = new BufferedWriter(fw);
+                    bf.write(sb.toString());
+                    Log.i("FILEAPPEND", "Appended the new photo info to the existing file");
+                    bf.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
 
-            LatLng latLng = new LatLng(mCurrentLocation.getLatitude(),
+            // Add a marker on the google map with the photo as the icon
+            addMarkerFromImagePathAtLocation(mCurrentPhotoPath.substring(5),
+                    mCurrentLocation.getLatitude(),
                     mCurrentLocation.getLongitude());
-
-            mMap.addMarker(new MarkerOptions()
-                    .position(latLng)
-                    .title("New Picture")
-                    .snippet(strCoords)
-                    .icon(BitmapDescriptorFactory.fromBitmap(bmp)));
-
         }
     }
 
